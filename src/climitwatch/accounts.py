@@ -215,7 +215,10 @@ class AccountManager:
                 retry_after=exc.retry_after,
             )
 
-        if source.account.id not in self._profile_fetched:
+        # The profile call only resolves the account's name. Once that is known
+        # (cached from an earlier run), repeating it every launch is pure spend
+        # against a rate limit we cannot see the budget of.
+        if source.account.id not in self._profile_fetched and not source.account.email:
             self._profile_fetched.add(source.account.id)
             try:
                 source.note_profile(parse_profile(client.fetch_profile(tokens.access_token)))

@@ -39,10 +39,15 @@ class PollerWorker(QObject):
     next_poll_in = Signal(float)
     accounts_changed = Signal()
 
-    def __init__(self, manager: AccountManager, settings: Settings) -> None:
+    def __init__(
+        self, manager: AccountManager, settings: Settings, initial_delay: float = 0.0
+    ) -> None:
         super().__init__()
         self.manager = manager
         self.settings = settings
+        #: Restarting the app should not cost a fetch when the cached data is
+        #: still within the polling window.
+        self._initial_delay = max(0.0, initial_delay)
         self._wake = threading.Event()
         self._stopping = False
         self._error_streak = 0
@@ -70,6 +75,10 @@ class PollerWorker(QObject):
     def run(self) -> None:
         self._client = UsageClient()
         try:
+            if self._initial_delay > 0:
+                self.next_poll_in.emit(self._initial_delay)
+                self._wake.wait(self._initial_delay)
+                self._wake.clear()
             while not self._stopping:
                 snapshots = self._poll_once()
                 if self._stopping:

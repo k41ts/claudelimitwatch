@@ -66,7 +66,9 @@ class WatcherApp(QObject):
         self._restore_geometry()
 
         self.thread = QThread(self)
-        self.worker = PollerWorker(self.manager, self.settings)
+        self.worker = PollerWorker(
+            self.manager, self.settings, initial_delay=self._initial_poll_delay()
+        )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.snapshot_ready.connect(self._on_snapshot, Qt.ConnectionType.QueuedConnection)
@@ -81,6 +83,23 @@ class WatcherApp(QObject):
         self._topmost_timer.timeout.connect(self._keep_on_top)
         if self.settings.reassert_topmost:
             self._topmost_timer.start(TOPMOST_TICK_MS)
+
+    def _initial_poll_delay(self) -> float:
+        """Seconds to wait before the first fetch after launch.
+
+        Cached numbers are reused until they age past the polling window, so
+        restarting the app (or reinstalling it) costs nothing.
+        """
+        wanted = [s.account.id for s in self.manager.sources]
+        if not wanted:
+            return 0.0
+        ages = []
+        for account_id in wanted:
+            snapshot = self.snapshots.get(account_id)
+            if snapshot is None or not snapshot.ok:
+                return 0.0
+            ages.append(snapshot.age_seconds())
+        return max(0.0, float(self.settings.poll_seconds) - max(ages))
 
     def _apply_cached_identities(self) -> None:
         """Name accounts from the last resolved profile, not from a guess.
