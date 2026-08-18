@@ -11,6 +11,7 @@ import logging
 import sys
 from dataclasses import asdict
 
+from . import cache
 from .accounts import AccountManager
 from .api.client import UsageClient
 from .formatting import age_text, bucket_line, local_time
@@ -47,6 +48,14 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     manager = AccountManager(read_only_credentials=args.read_only)
+    # Same identity cache the overlay uses, so both name accounts identically.
+    identities = cache.load_identities()
+    for source in manager.sources:
+        entry = identities.get(source.account.id) or {}
+        source.account.label = entry.get("label") or source.account.label
+        source.account.email = entry.get("email") or source.account.email
+        source.account.plan = entry.get("plan") or source.account.plan
+
     if not manager.sources:
         print("No accounts found. Log in with Claude Code, or add an account in the app.")
         return 1

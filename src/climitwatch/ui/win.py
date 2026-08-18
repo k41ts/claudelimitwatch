@@ -1,9 +1,13 @@
-"""Windows-only window tweaks, all optional and no-ops elsewhere."""
+"""Platform window tweaks. Windows-specific, no-ops elsewhere."""
 
 from __future__ import annotations
 
 import ctypes
+import logging
+import os
 import sys
+
+log = logging.getLogger(__name__)
 
 _IS_WINDOWS = sys.platform == "win32"
 
@@ -46,3 +50,20 @@ def make_non_activating(win_id: int) -> None:
         user32.SetWindowLongW(int(win_id), GWL_EXSTYLE, style | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)
     except OSError:
         pass
+
+
+def platform_warning() -> str | None:
+    """A caveat worth telling the user about this session, if any.
+
+    Wayland compositors own the stacking order: Qt asks to stay on top, but
+    the request is advisory and most compositors ignore it. Better to say so
+    than to let the overlay quietly sink behind other windows.
+    """
+    if _IS_WINDOWS:
+        return None
+    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        return (
+            "Wayland session detected: the compositor decides window stacking, "
+            "so always-on-top may not work. An X11/Xorg session behaves as expected."
+        )
+    return None

@@ -1,21 +1,35 @@
-"""Run the watcher when Windows starts.
+"""Run the watcher when the desktop session starts.
 
-Uses the per-user Run key (``HKCU``), so no admin rights and no scheduled task
-are involved -- and removing the entry is just as cheap as adding it.
+Two backends, picked by platform:
+
+* **Windows** — a shortcut in the Startup folder plus the ``StartupApproved``
+  record that gives it an On/Off row in Settings. A plain ``Run`` value also
+  launches at logon but never appeared in that list on Windows 11.
+* **Linux** — an XDG autostart desktop entry in ``~/.config/autostart``, which
+  every mainstream desktop environment reads.
+
+Both backends expose the same calls: :func:`is_enabled`, :func:`enable`,
+:func:`disable`, :func:`apply`.
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import shlex
 import sys
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-#: Legacy mechanism. Still read (and cleaned up) so upgrades migrate, but a
-#: fresh enable() uses the Startup folder instead: a plain Run value never
-#: showed up in Settings > Apps > Startup on Windows 11 here, while a shortcut
-#: is something the user can see and manage directly.
+IS_WINDOWS = sys.platform == "win32"
+IS_LINUX = sys.platform.startswith("linux")
+
+APP_DISPLAY = "Claude Limit Watcher"
+
+# --- Windows locations ------------------------------------------------------
+
+#: Legacy mechanism. Still read (and cleaned up) so upgrades migrate.
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 VALUE_NAME = "ClimitWatch"
 
@@ -31,50 +45,55 @@ APPROVED_ENABLED = bytes([2] + [0] * 11)
 
 SHORTCUT_NAME = "Claude Limit Watcher.lnk"
 
-_IS_WINDOWS = sys.platform == "win32"
+# --- Linux locations --------------------------------------------------------
+
+DESKTOP_FILE_NAME = "climitwatch.desktop"
 
 
 def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
-def launch_command() -> str:
-    """The command Windows should run at logon, quoted for the registry."""
+def _target() -> tuple[str, str]:
+    """(executable, arguments) that starts the app."""
     if is_frozen():
-        return f'"{Path(sys.executable).resolve()}"'
+        return str(Path(sys.executable).resolve()), ""
 
-    # Source checkout: launcher.py puts src/ on sys.path itself, and pythonw
-    # keeps the console window from flashing.
     interpreter = Path(sys.executable)
-    pythonw = interpreter.with_name("pythonw.exe")
-    if not pythonw.exists():
-        pythonw = interpreter
+    if IS_WINDOWS:
+        # pythonw keeps a console window from flashing at logon.
+        windowless = interpreter.with_name("pythonw.exe")
+        if windowless.exists():
+            interpreter = windowless
     launcher = Path(__file__).resolve().parents[2] / "launcher.py"
-    return f'"{pythonw}" "{launcher}"'
+    arguments = f'"{launcher}"' if IS_WINDOWS else shlex.quote(str(launcher))
+    return str(interpreter), arguments
+
+
+def launch_command() -> str:
+    """Full command line, for display and for the desktop entry."""
+    target, arguments = _target()
+    if IS_WINDOWS:
+        return f'"{target}" {arguments}'.strip()
+    parts = [shlex.quote(target)]
+    if arguments:
+        parts.append(arguments)
+    return " ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Windows backend
+# ---------------------------------------------------------------------------
 
 
 def startup_dir() -> Path:
-    """%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"""
-    import os
-
+    """%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"""
     appdata = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
     return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 
 
 def shortcut_path() -> Path:
     return startup_dir() / SHORTCUT_NAME
-
-
-def _target() -> tuple[str, str]:
-    """(exe, arguments) for the shortcut."""
-    if is_frozen():
-        return str(Path(sys.executable).resolve()), ""
-    interpreter = Path(sys.executable)
-    pythonw = interpreter.with_name("pythonw.exe")
-    if not pythonw.exists():
-        pythonw = interpreter
-    launcher = Path(__file__).resolve().parents[2] / "launcher.py"
-    return str(pythonw), f'"{launcher}"'
 
 
 def _create_shortcut() -> bool:
@@ -90,7 +109,7 @@ def _create_shortcut() -> bool:
         f"$l.TargetPath = '{target}'; "
         f"$l.Arguments = '{arguments}'; "
         f"$l.WorkingDirectory = '{Path(target).parent}'; "
-        "$l.Description = 'Claude Limit Watcher'; "
+        f"$l.Description = '{APP_DISPLAY}'; "
         "$l.Save()"
     )
     try:
@@ -105,6 +124,38 @@ def _create_shortcut() -> bool:
         log.warning("Could not create the startup shortcut: %s", exc)
         return False
     return link.exists()
+
+
+def _read_shortcut_target() -> str | None:
+    """What the installed shortcut really points at.
+
+    Diagnostics must not guess: a source checkout and an installed build
+    register different commands, and the interesting question is always which
+    one the desktop will actually run.
+    """
+    import subprocess
+
+    script = (
+        "$s = New-Object -ComObject WScript.Shell; "
+        f"$l = $s.CreateShortcut('{shortcut_path()}'); "
+        "Write-Output ($l.TargetPath + '|' + $l.Arguments)"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.debug("Could not read the shortcut: %s", exc)
+        return None
+    target, _, arguments = result.stdout.strip().partition("|")
+    if not target:
+        return None
+    return f'"{target}" {arguments}'.strip()
 
 
 def _registry_value_exists(key_path: str, name: str) -> bool:
@@ -130,7 +181,7 @@ def _set_approval(key_path: str, name: str) -> None:
         log.debug("Could not write startup approval: %s", exc)
 
 
-def _delete_value(key_path: str, name: str) -> None:
+def _delete_registry_value(key_path: str, name: str) -> None:
     import winreg
 
     try:
@@ -143,51 +194,20 @@ def _delete_value(key_path: str, name: str) -> None:
 
 
 def has_legacy_run_entry() -> bool:
-    return _IS_WINDOWS and _registry_value_exists(RUN_KEY, VALUE_NAME)
+    return IS_WINDOWS and _registry_value_exists(RUN_KEY, VALUE_NAME)
 
 
 def _drop_legacy_run_entry() -> None:
     """Old installs used a Run value; keep only one mechanism active."""
-    _delete_value(RUN_KEY, VALUE_NAME)
-    _delete_value(APPROVED_RUN_KEY, VALUE_NAME)
+    _delete_registry_value(RUN_KEY, VALUE_NAME)
+    _delete_registry_value(APPROVED_RUN_KEY, VALUE_NAME)
 
 
-def is_enabled() -> bool:
-    if not _IS_WINDOWS:
-        return False
+def _windows_is_enabled() -> bool:
     return shortcut_path().exists() or has_legacy_run_entry()
 
 
-def current_command() -> str | None:
-    """What will actually run at logon, for display and debugging."""
-    if not _IS_WINDOWS:
-        return None
-    if shortcut_path().exists():
-        target, arguments = _target()
-        return f'"{target}" {arguments}'.strip()
-    import winreg
-
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
-            value, _ = winreg.QueryValueEx(key, VALUE_NAME)
-            return str(value)
-    except OSError:
-        return None
-
-
-def is_listed() -> bool:
-    """Whether Windows has an On/Off record for our startup item."""
-    if not _IS_WINDOWS:
-        return False
-    return _registry_value_exists(APPROVED_FOLDER_KEY, SHORTCUT_NAME) or _registry_value_exists(
-        APPROVED_RUN_KEY, VALUE_NAME
-    )
-
-
-def enable() -> bool:
-    """Create (or refresh) the logon shortcut. Returns True on success."""
-    if not _IS_WINDOWS:
-        return False
+def _windows_enable() -> bool:
     if not _create_shortcut():
         return False
     _set_approval(APPROVED_FOLDER_KEY, SHORTCUT_NAME)
@@ -195,11 +215,8 @@ def enable() -> bool:
     return True
 
 
-def disable() -> bool:
-    """Remove the logon shortcut and any legacy entry."""
-    if not _IS_WINDOWS:
-        return False
-    _delete_value(APPROVED_FOLDER_KEY, SHORTCUT_NAME)
+def _windows_disable() -> bool:
+    _delete_registry_value(APPROVED_FOLDER_KEY, SHORTCUT_NAME)
     _drop_legacy_run_entry()
     try:
         shortcut_path().unlink(missing_ok=True)
@@ -207,6 +224,148 @@ def disable() -> bool:
         log.warning("Could not remove the startup shortcut: %s", exc)
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Linux backend (XDG autostart)
+# ---------------------------------------------------------------------------
+
+
+def autostart_dir() -> Path:
+    """$XDG_CONFIG_HOME/autostart, the spec-defined location."""
+    config_home = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(config_home) / "autostart"
+
+
+def desktop_entry_path() -> Path:
+    return autostart_dir() / DESKTOP_FILE_NAME
+
+
+def desktop_entry_text() -> str:
+    return "\n".join(
+        [
+            "[Desktop Entry]",
+            "Type=Application",
+            f"Name={APP_DISPLAY}",
+            "Comment=Remaining Claude usage limits, always on top",
+            f"Exec={launch_command()}",
+            "Icon=climitwatch",
+            "Terminal=false",
+            "Categories=Utility;Monitor;",
+            "X-GNOME-Autostart-enabled=true",
+            "",
+        ]
+    )
+
+
+def _linux_is_enabled() -> bool:
+    path = desktop_entry_path()
+    if not path.exists():
+        return False
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    # Desktops treat this key as an off switch even when the file is present,
+    # so honour it instead of reporting a false positive.
+    return "X-GNOME-Autostart-enabled=false" not in text
+
+
+def _linux_enable() -> bool:
+    path = desktop_entry_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(desktop_entry_text(), encoding="utf-8")
+        path.chmod(0o644)
+    except OSError as exc:
+        log.warning("Could not write the autostart entry: %s", exc)
+        return False
+    return True
+
+
+def _linux_disable() -> bool:
+    try:
+        desktop_entry_path().unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("Could not remove the autostart entry: %s", exc)
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def supported() -> bool:
+    return IS_WINDOWS or IS_LINUX
+
+
+def is_enabled() -> bool:
+    if IS_WINDOWS:
+        return _windows_is_enabled()
+    if IS_LINUX:
+        return _linux_is_enabled()
+    return False
+
+
+def is_listed() -> bool:
+    """Whether the desktop has an On/Off record for our startup item.
+
+    Windows keeps that state in the registry; on Linux the desktop entry file
+    is itself the record.
+    """
+    if IS_WINDOWS:
+        return _registry_value_exists(APPROVED_FOLDER_KEY, SHORTCUT_NAME) or (
+            _registry_value_exists(APPROVED_RUN_KEY, VALUE_NAME)
+        )
+    if IS_LINUX:
+        return desktop_entry_path().exists()
+    return False
+
+
+def current_command() -> str | None:
+    """What will actually run at logon, for display and debugging."""
+    if not is_enabled():
+        return None
+    if IS_LINUX:
+        try:
+            for line in desktop_entry_path().read_text(encoding="utf-8").splitlines():
+                if line.startswith("Exec="):
+                    return line[len("Exec=") :]
+        except OSError:
+            return None
+        return None
+    if IS_WINDOWS:
+        if shortcut_path().exists():
+            return _read_shortcut_target() or launch_command()
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+                value, _ = winreg.QueryValueEx(key, VALUE_NAME)
+                return str(value)
+        except OSError:
+            return None
+    return launch_command()
+
+
+def enable() -> bool:
+    """Register (or refresh) the logon entry. Returns True on success."""
+    if IS_WINDOWS:
+        return _windows_enable()
+    if IS_LINUX:
+        return _linux_enable()
+    return False
+
+
+def disable() -> bool:
+    """Remove the logon entry. A missing entry counts as success."""
+    if IS_WINDOWS:
+        return _windows_disable()
+    if IS_LINUX:
+        return _linux_disable()
+    return False
 
 
 def apply(enabled: bool) -> bool:

@@ -86,11 +86,15 @@ class SettingsDialog(QDialog):
         self.topmost.setChecked(settings.reassert_topmost)
         form.addRow("", self.topmost)
 
-        self.autostart = QCheckBox("Start with Windows")
+        self.autostart = QCheckBox(
+            "Start with Windows" if autostart.IS_WINDOWS else "Start at login"
+        )
         # Reflect the registry, not just our own settings file: the entry
         # may have been removed by the uninstaller or another tool.
         self.autostart.setChecked(autostart.is_enabled())
         form.addRow("", self.autostart)
+
+        self.autostart.setEnabled(autostart.supported())
 
         self.read_only = QCheckBox("Never write ~/.claude/.credentials.json")
         self.read_only.setChecked(settings.read_only_credentials)

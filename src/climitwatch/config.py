@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -37,17 +38,41 @@ OAUTH_SCOPES = [
 USER_AGENT = "climitwatch/0.1 (local usage monitor)"
 
 
+IS_WINDOWS = sys.platform == "win32"
+
+
 def app_dir() -> Path:
-    """Per-user data directory, created on demand."""
-    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_DATA_HOME")
-    root = Path(base) if base else Path.home() / ".local" / "share"
-    path = root / APP_NAME
+    """Per-user data directory, created on demand.
+
+    Windows keeps everything under %LOCALAPPDATA%\\ClimitWatch; elsewhere the
+    XDG base directory spec applies, so data lands in
+    ~/.local/share/climitwatch.
+    """
+    if IS_WINDOWS:
+        base = os.environ.get("LOCALAPPDATA")
+        root = Path(base) if base else Path.home() / "AppData" / "Local"
+        path = root / APP_NAME
+    else:
+        base = os.environ.get("XDG_DATA_HOME")
+        root = Path(base) if base else Path.home() / ".local" / "share"
+        path = root / APP_NAME.lower()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def config_dir() -> Path:
+    """Preferences: same place as the data on Windows, XDG config on Linux."""
+    if IS_WINDOWS:
+        return app_dir()
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else Path.home() / ".config"
+    path = root / APP_NAME.lower()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def settings_path() -> Path:
-    return app_dir() / "settings.json"
+    return config_dir() / "settings.json"
 
 
 def accounts_path() -> Path:

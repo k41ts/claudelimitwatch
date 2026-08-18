@@ -96,9 +96,16 @@ def build_ico(frames: dict[int, bytes], out: Path) -> None:
 def main() -> int:
     QApplication([])
     frames = {size: png_bytes(render(size)) for size in SIZES}
-    out = ROOT / "assets" / "climitwatch.ico"
-    build_ico(frames, out)
-    print(f"wrote {out} ({out.stat().st_size} bytes, {len(frames)} sizes)")
+
+    ico = ROOT / "assets" / "climitwatch.ico"
+    build_ico(frames, ico)
+    print(f"wrote {ico} ({ico.stat().st_size} bytes, {len(frames)} sizes)")
+
+    # Linux desktops want a PNG in the hicolor theme, not an .ico.
+    for size in (48, 128, 256):
+        png = ROOT / "assets" / f"climitwatch-{size}.png"
+        png.write_bytes(frames[size])
+        print(f"wrote {png} ({png.stat().st_size} bytes)")
     return 0
 
 

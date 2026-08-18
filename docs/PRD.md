@@ -1,6 +1,8 @@
 # PRD — Claude Limit Watcher
 
-**Status:** v0.1.0 jalan di Windows 11 · **Terakhir diperbarui:** 19 Agustus 2026
+**Status:** v0.1.0 jalan di Windows 11; dukungan Linux ditulis dan diuji lewat
+simulasi platform, belum dijalankan di desktop Linux sungguhan ·
+**Terakhir diperbarui:** 19 Agustus 2026
 
 ---
 
@@ -21,8 +23,8 @@ akun sekaligus, plus notifikasi saat mendekati batas.
 
 ## 3. Pengguna sasaran
 
-Pengguna Claude Code di Windows yang bekerja seharian dengan Claude, terutama
-yang memegang lebih dari satu akun (pribadi + kerja/klien).
+Pengguna Claude Code (Windows atau Linux) yang bekerja seharian dengan Claude,
+terutama yang memegang lebih dari satu akun (pribadi + kerja/klien).
 
 ## 4. Tujuan
 
@@ -37,8 +39,9 @@ yang memegang lebih dari satu akun (pribadi + kerja/klien).
 ## 5. Bukan tujuan (non-goals)
 
 - **Bukan** alat penghitung biaya token per proyek — sudah ada `ccusage`.
-- **Bukan** lintas platform. Windows saja; overlay dan penyimpanan kredensial
-  memakai API khusus Windows (DPAPI, `SetWindowPos`).
+- **Bukan** lintas platform penuh. Windows dan Linux (X11); macOS di luar
+  lingkup karena Claude Code menyimpan kredensialnya di Keychain, bukan di
+  `~/.claude/.credentials.json`.
 - **Bukan** layanan berbagi/telemetri. Semua data tinggal di mesin pengguna.
 - **Tidak** mengubah perilaku Claude Code, hanya membaca.
 - **Tidak** menampilkan riwayat/grafik jangka panjang di v0.1.
@@ -63,7 +66,7 @@ Diverifikasi terhadap CLI 2.1.234. Risiko dan mitigasinya di §9.
 |---|---|
 | A1 | Akun yang sedang login di Claude Code terdeteksi otomatis tanpa setup |
 | A2 | Akun tambahan lewat login browser, tanpa menyalin kode apa pun |
-| A3 | Token akun tambahan disimpan terenkripsi per-user (DPAPI) |
+| A3 | Token akun tambahan disimpan seaman yang platform sediakan: DPAPI (Windows), keyring sesi (Linux), dan file 0600 sebagai fallback yang dilaporkan apa adanya |
 | A4 | Refresh token akun tambahan tidak boleh mengganggu sesi Claude Code |
 | A5 | Nama akun tidak boleh bergantung pada request yang bisa gagal |
 
@@ -114,10 +117,10 @@ memicu notifikasi.
 
 | ID | Kebutuhan |
 |---|---|
-| I1 | Instalasi per-user, tanpa admin, tanpa UAC |
-| I2 | Muncul di **Settings → Apps** dengan tombol uninstall |
+| I1 | Instalasi per-user, tanpa admin/sudo (Windows: tanpa UAC) |
+| I2 | Terdaftar di manajer aplikasi OS (Windows: Settings → Apps; Linux: menu aplikasi + ikon) |
 | I3 | Bisa nyala saat login, dan bisa dimatikan dari dalam aplikasi |
-| I4 | Uninstall bersih; data akun dipertahankan kecuali diminta `-Purge` |
+| I4 | Uninstall bersih; data akun dipertahankan kecuali diminta `-Purge` / `--purge` |
 | I5 | Installer menghentikan instance lama sebelum memasang yang baru |
 
 ## 7. Kebutuhan non-fungsional
@@ -148,13 +151,24 @@ memicu notifikasi.
 | Endpoint internal berubah sewaktu-waktu | Parser toleran; pesan jelas, bukan crash; versi CLI acuan dicatat |
 | Balapan refresh token dengan CLI | Protokol baca-ulang sebelum & sesudah refresh (§6.3) |
 | Rate limit | Interval mengikuti CLI + backoff + single instance |
-| Token adalah kredensial penuh | Semua lokal, DPAPI, tidak pernah di-log |
+| Token adalah kredensial penuh | Semua lokal, DPAPI/keyring, tidak pernah di-log |
 | Overlay tertutup game fullscreen | Batasan Windows; didokumentasikan, bukan bug |
+| Wayland mengabaikan always-on-top | Terdeteksi saat start dan diperingatkan; X11 berperilaku normal |
 
-## 10. Status v0.1.0
+## 10. Status
 
-Semua kebutuhan di atas sudah terpasang dan diverifikasi di Windows 11
-(1920×1080, 150% scaling), 68 test otomatis.
+**Windows** — semua kebutuhan di atas terpasang dan diverifikasi langsung di
+Windows 11 (1920×1080, 150% scaling): overlay, multi-akun, refresh token,
+installer, autostart.
+
+**Linux** — jalur kodenya lengkap (backend autostart XDG, path XDG, keyring,
+installer `install.sh`/`uninstall.sh`) dan diuji lewat simulasi platform di
+suite yang sama, tapi **belum pernah dijalankan di desktop Linux sungguhan**.
+Yang belum terbukti: rendering overlay, perilaku always-on-top, tray icon, dan
+apakah desktop environment benar-benar menjalankan entri autostart-nya.
+
+92 test otomatis.
 
 Belum dikerjakan: riwayat/grafik pemakaian, dukungan akun Team/Enterprise
-(`member_dashboard_available`), dan auto-update.
+(`member_dashboard_available`), auto-update, dan binary siap pakai untuk Linux
+(PyInstaller tidak bisa cross-compile, harus dibuild di Linux).

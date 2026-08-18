@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 from .app import WatcherApp
 from .config import APP_NAME
 from .single_instance import SingleInstance
+from .ui.win import platform_warning
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,6 +33,10 @@ def main(argv: list[str] | None = None) -> int:
             "No system tray is available; the mini bar will still work, "
             "but there will be no tray icon or notifications.",
         )
+
+    warning = platform_warning()
+    if warning:
+        logging.warning(warning)
 
     watcher = WatcherApp(app)
     instance.activated.connect(watcher.show_panel)

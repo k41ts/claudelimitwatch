@@ -1,7 +1,7 @@
 # Claude Limit Watcher
 
-Overlay kecil buat Windows yang nempel di atas window lain dan nunjukin **sisa
-limit usage Claude** — session 5 jam, weekly, weekly per-model, plus usage
+Overlay kecil buat **Windows dan Linux** yang nempel di atas window lain dan
+nunjukin **sisa limit usage Claude** — session 5 jam, weekly, weekly per-model, plus usage
 credits — buat satu atau banyak akun sekaligus.
 
 ```
@@ -11,7 +11,53 @@ credits — buat satu atau banyak akun sekaligus.
 Klik mini bar → panel detail. Klik kanan → menu. Ada juga tray icon yang
 warnanya ikut kondisi limit dan ngasih notifikasi waktu kelewat ambang.
 
-## Install
+## Install (Linux)
+
+Belum ada binary siap pakai untuk Linux — pasang dari source (butuh `python3`
+dan `git`):
+
+```bash
+git clone https://github.com/k41ts/claudelimitwatch.git
+cd claudelimitwatch
+./installer/install.sh
+```
+
+Semuanya di dalam `$HOME`, **tanpa sudo**: venv sendiri di
+`~/.local/share/climitwatch`, launcher `~/.local/bin/climitwatch`, entri menu
+aplikasi, ikon, dan autostart XDG di `~/.config/autostart`.
+
+Flag: `--no-autostart`, `--no-launch`, dan `--binary PATH` kalau kamu sudah
+punya binary hasil PyInstaller.
+
+Bikin binary sendiri (harus dijalankan **di** Linux, PyInstaller nggak bisa
+cross-compile):
+
+```bash
+pip install pyinstaller
+python tools/make_icon.py
+pyinstaller --noconsole --onefile --name ClimitWatch --paths src launcher.py
+./installer/install.sh --binary dist/ClimitWatch
+```
+
+Cabut: `./installer/uninstall.sh` (tambah `--purge` untuk sekalian menghapus
+akun dan pengaturan).
+
+### Yang perlu diperhatikan di Linux
+
+- **Wayland**: compositor yang menentukan urutan tumpukan window, jadi
+  always-on-top bisa diabaikan. Sesi **X11/Xorg** berperilaku seperti yang
+  diharapkan. Aplikasi mendeteksi ini dan menulis peringatan di log saat mulai.
+- **Tray icon**: butuh host StatusNotifier. KDE dan XFCE bawaan; GNOME perlu
+  ekstensi seperti *AppIndicator Support*. Tanpa itu, mini bar tetap jalan,
+  cuma tray-nya nggak muncul.
+- **Penyimpanan token akun tambahan**: pakai keyring sesi (SecretStorage) kalau
+  tersedia dan tidak terkunci; kalau tidak, jatuh ke file `0600` yang **tidak
+  terenkripsi** — sama seperti `~/.claude/.credentials.json` milik Claude Code
+  sendiri. Aplikasi melaporkan mana yang dipakai, tidak mengklaim lebih.
+- Lokasi file mengikuti XDG: pengaturan di `~/.config/climitwatch`, data di
+  `~/.local/share/climitwatch`.
+
+## Install (Windows)
 
 Build `.exe`-nya dulu, lalu jalanin installer per-user (nggak butuh admin):
 
