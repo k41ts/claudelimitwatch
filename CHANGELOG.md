@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.2.0 — 19 Agustus 2026
+
+### Linux
+
+- Berjalan di Linux, bukan cuma Windows. Autostart lewat entri XDG di
+  `~/.config/autostart`, lokasi file mengikuti XDG base directory, dan token
+  akun tambahan disimpan di keyring sesi (SecretStorage) kalau tersedia —
+  kalau tidak, file `0600` yang dilaporkan apa adanya, tanpa mengklaim
+  enkripsi yang tidak ada.
+- `installer/linux/install.sh` dan `uninstall.sh`: pasang per-user tanpa sudo,
+  lengkap dengan entri menu aplikasi, ikon, dan autostart.
+- Peringatan saat sesi Wayland, karena compositor bisa mengabaikan
+  always-on-top. Sesi X11 berperilaku normal.
+- Belum ada binary siap pakai untuk Linux: PyInstaller tidak bisa
+  cross-compile, jadi harus dibuild di Linux.
+
+### Perbaikan
+
+- Restart aplikasi tidak lagi memicu request API kalau data di cache masih
+  segar, dan panggilan profil dilewati setelah nama akun diketahui. Ini yang
+  sebelumnya memicu `HTTP 429` saat pengembangan.
+- Diagnostik jujur: `current_command()` membaca shortcut yang benar-benar
+  terpasang, dan CLI debug memakai cache identitas yang sama dengan overlay.
+
+### Struktur
+
+- `installer/` dipisah menjadi `installer/windows/` dan `installer/linux/`.
+
 ## v0.1.0 — 19 Agustus 2026
 
 Rilis pertama.
