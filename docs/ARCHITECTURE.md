@@ -6,6 +6,9 @@ yang tidak jelas dari membaca kode saja.
 ## Peta modul
 
 ```
+installer/
+├── windows/                 install.ps1, uninstall.ps1, version_info.txt
+└── linux/                   install.sh, uninstall.sh
 launcher.py                  entry PyInstaller + entri logon (menaruh src/ di sys.path)
 src/climitwatch/
 ├── __main__.py              QApplication, single-instance guard
@@ -16,7 +19,7 @@ src/climitwatch/
 ├── poller.py                loop polling di QThread + backoff
 ├── notify.py                logika ambang notifikasi (bebas Qt, mudah dites)
 ├── cache.py                 snapshot + identitas akun terakhir
-├── autostart.py             shortcut folder Startup + record On/Off
+├── autostart.py             Startup shortcut (Windows) / XDG entry (Linux)
 ├── single_instance.py       QLocalServer lock
 ├── accounts.py              registry akun: Claude Code + akun tambahan
 ├── api/
@@ -26,7 +29,7 @@ src/climitwatch/
 │   ├── cc_credentials.py    baca/refresh ~/.claude/.credentials.json
 │   ├── oauth.py             PKCE, tukar kode, refresh token
 │   ├── callback_server.py   listener loopback untuk login browser
-│   └── store.py             akun tambahan, terenkripsi DPAPI
+│   └── store.py             akun tambahan: DPAPI / keyring / file 0600
 └── ui/
     ├── theme.py             Palette + MeterBar + helper gambar
     ├── minibar.py           overlay always-on-top
@@ -35,7 +38,7 @@ src/climitwatch/
     ├── login_dialog.py      alur login browser
     ├── accounts_dialog.py   daftar akun
     ├── settings_dialog.py   preferensi
-    └── win.py               tweak jendela khusus Windows
+    └── win.py               tweak jendela Windows + peringatan Wayland
 ```
 
 ## Alur data
@@ -100,7 +103,7 @@ melewatkan widget yang bersarang lebih dari satu level: label menumpuk (+6 tiap
 render) sampai menutupi header. Sekarang body tiap kartu hidup di container
 widget sendiri yang dibuang utuh (`deleteLater`) lalu dibuat ulang.
 
-### Autostart lewat folder Startup, bukan Run key
+### Autostart: folder Startup (Windows), entri XDG (Linux)
 
 Entri `HKCU\...\Run` berjalan saat logon tapi tidak muncul di
 **Settings → Apps → Startup** pada Windows 11 yang diuji — halaman itu
@@ -110,8 +113,13 @@ aplikasi, dan tetap didampingi record `StartupApproved` (`0x02` = aktif) supaya
 punya status On/Off. Entri `Run` versi lama dihapus saat enable, agar tidak ada
 yang jalan dua kali.
 
+Di Linux mekanismenya berbeda tapi API-nya sama: satu file
+`~/.config/autostart/climitwatch.desktop`. Perlu diingat desktop kadang
+mematikannya dengan menulis `X-GNOME-Autostart-enabled=false`, bukan menghapus
+file-nya, jadi `is_enabled()` membaca isi file, bukan sekadar keberadaannya.
+
 Exe wajib punya `FileDescription` dan `CompanyName` (lihat
-`installer/version_info.txt`) — tanpa itu Windows tidak punya nama maupun
+`installer/windows/version_info.txt`) — tanpa itu Windows tidak punya nama maupun
 publisher untuk ditampilkan.
 
 ### Single instance
@@ -121,6 +129,13 @@ Dua salinan menggandakan beban request. `single_instance.py` memegang
 berjalan memunculkan panelnya. Installer juga menghentikan instance lama
 (termasuk yang dijalankan dari source lewat `pythonw`) sebelum memasang, lalu
 memverifikasi aplikasi benar-benar hidup.
+
+### Penyimpanan token lintas platform
+
+Windows memakai DPAPI. Linux memakai keyring sesi lewat SecretStorage kalau
+tersedia dan tidak terkunci; kalau tidak, file `0600` yang **tidak terenkripsi**.
+`store.protection()` melaporkan mana yang berlaku supaya dokumen dan UI tidak
+mengklaim proteksi yang tidak ada.
 
 ## Menjalankan test
 

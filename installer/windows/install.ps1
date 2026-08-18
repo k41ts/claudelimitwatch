@@ -23,7 +23,7 @@
     Do not start the app after installing.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File installer\install.ps1
+    powershell -ExecutionPolicy Bypass -File installer\windows\install.ps1
 #>
 [CmdletBinding()]
 param(
@@ -48,10 +48,12 @@ $UninstKey  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$AppNam
 function Write-Step($message) { Write-Host "  $message" }
 
 if (-not $Source) {
-    $Source = Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\ClimitWatch.exe'
+    # installer\windows -> repo root
+    $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+    $Source = Join-Path $repoRoot 'dist\ClimitWatch.exe'
 }
 if (-not (Test-Path $Source)) {
-    throw "Could not find $Source. Build it first: pyinstaller --noconsole --onefile --name ClimitWatch --paths src launcher.py"
+    throw "Could not find $Source. Build it first: pyinstaller --noconsole --onefile --name ClimitWatch --paths src --icon assets\climitwatch.ico --version-file installer\windowsersion_info.txt launcher.py"
 }
 
 Write-Host "Installing $AppDisplay $Version for $env:USERNAME" -ForegroundColor Cyan

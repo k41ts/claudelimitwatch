@@ -19,7 +19,7 @@ dan `git`):
 ```bash
 git clone https://github.com/k41ts/claudelimitwatch.git
 cd claudelimitwatch
-./installer/install.sh
+./installer/linux/install.sh
 ```
 
 Semuanya di dalam `$HOME`, **tanpa sudo**: venv sendiri di
@@ -36,10 +36,10 @@ cross-compile):
 pip install pyinstaller
 python tools/make_icon.py
 pyinstaller --noconsole --onefile --name ClimitWatch --paths src launcher.py
-./installer/install.sh --binary dist/ClimitWatch
+./installer/linux/install.sh --binary dist/ClimitWatch
 ```
 
-Cabut: `./installer/uninstall.sh` (tambah `--purge` untuk sekalian menghapus
+Cabut: `./installer/linux/uninstall.sh` (tambah `--purge` untuk sekalian menghapus
 akun dan pengaturan).
 
 ### Yang perlu diperhatikan di Linux
@@ -63,11 +63,11 @@ Build `.exe`-nya dulu, lalu jalanin installer per-user (nggak butuh admin):
 
 ```bash
 .venv/Scripts/python.exe tools/make_icon.py
-.venv/Scripts/pyinstaller.exe --noconsole --onefile --name ClimitWatch --paths src \n  --icon assets/climitwatch.ico --version-file installer/version_info.txt launcher.py
+.venv/Scripts/pyinstaller.exe --noconsole --onefile --name ClimitWatch --paths src \n  --icon assets/climitwatch.ico --version-file installer/windows/version_info.txt launcher.py
 ```
 
 ```bash
-powershell -ExecutionPolicy Bypass -File installer/install.ps1
+powershell -ExecutionPolicy Bypass -File installer/windows/install.ps1
 ```
 
 Ikon dan `--version-file` itu **bukan kosmetik**: tanpa `FileDescription` dan
@@ -126,7 +126,7 @@ Bikin `.exe` mandiri:
 
 ```bash
 .venv/Scripts/python.exe tools/make_icon.py
-.venv/Scripts/pyinstaller.exe --noconsole --onefile --name ClimitWatch --paths src \n  --icon assets/climitwatch.ico --version-file installer/version_info.txt launcher.py
+.venv/Scripts/pyinstaller.exe --noconsole --onefile --name ClimitWatch --paths src \n  --icon assets/climitwatch.ico --version-file installer/windows/version_info.txt launcher.py
 ```
 
 ## Tampilan

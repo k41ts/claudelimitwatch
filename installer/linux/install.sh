@@ -3,12 +3,12 @@
 #
 # Everything lands under $HOME: no sudo, no system packages touched.
 #
-#   ./install.sh                 install from a source checkout (uses a venv)
-#   ./install.sh --binary PATH   install a prebuilt PyInstaller binary
-#   ./install.sh --no-autostart  skip the XDG autostart entry
-#   ./install.sh --no-launch     do not start the app afterwards
+#   installer/linux/install.sh                 install from a source checkout
+#   installer/linux/install.sh --binary PATH   install a prebuilt binary
+#   installer/linux/install.sh --no-autostart  skip the XDG autostart entry
+#   installer/linux/install.sh --no-launch     do not start the app afterwards
 #
-# Uninstall with ./uninstall.sh (or uninstall.sh --purge to drop settings too).
+# Uninstall with installer/linux/uninstall.sh (add --purge to drop settings too).
 
 set -euo pipefail
 
@@ -20,7 +20,8 @@ DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
 AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# installer/linux -> repo root
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BINARY=""
 AUTOSTART=1
 LAUNCH=1
