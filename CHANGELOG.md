@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.1 — 19 Agustus 2026
+
+### Perbaikan
+
+- **Akun tampil dengan nama yang salah.** Baris akun Claude Code dinamai dari
+  `~/.claude.json`, yang hanya mencatat akun terakhir yang login di file itu —
+  bisa berbeda dari pemilik token di `.credentials.json`. Akibatnya dua baris
+  bisa bernama sama, dan pemakaian satu akun terbaca di bawah nama akun lain.
+  Panggilan profil yang seharusnya mengoreksi ini tidak pernah jalan sejak
+  v0.2.0, karena syaratnya cuma "email sudah terisi" — padahal tebakan dari
+  `~/.claude.json` juga berbentuk email. Sekarang identitas hanya dianggap
+  sah kalau benar-benar berasal dari `/api/oauth/profile`.
+- Menambah atau menghapus akun tidak lagi mengembalikan nama ke tebakan awal.
+
 ## v0.2.0 — 19 Agustus 2026
 
 ### Linux
