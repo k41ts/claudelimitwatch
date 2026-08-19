@@ -55,15 +55,46 @@ def manager(monkeypatch, tmp_path):
     return instance
 
 
-def test_known_account_costs_one_request(manager):
-    """A cached identity means the profile call is dead weight."""
-    source = StubSource(Account(id="a", label="A", source="app", email="known@example.com"))
+def test_verified_account_costs_one_request(manager):
+    """A verified identity means the profile call is dead weight."""
+    source = StubSource(
+        Account(
+            id="a",
+            label="A",
+            source="app",
+            email="known@example.com",
+            identity_verified=True,
+        )
+    )
     client = RecordingClient()
 
     manager.poll(source, client)
 
     assert client.usage_calls == 1
     assert client.profile_calls == 0
+
+
+def test_guessed_email_is_still_checked_against_the_token(manager):
+    """Regression: the Claude Code account is named from ~/.claude.json, which
+    can name a different account than the token belongs to. An unverified
+    email must not suppress the profile call, or the row stays mislabelled and
+    the user sees one account's numbers under another account's name."""
+    source = StubSource(
+        Account(
+            id="claude-code",
+            label="Guessed Name",
+            source="claude-code",
+            email="stale@example.com",  # from ~/.claude.json, never verified
+            identity_verified=False,
+        )
+    )
+    client = RecordingClient()
+
+    manager.poll(source, client)
+
+    assert client.profile_calls == 1
+    assert source.account.email == "resolved@example.com"
+    assert source.account.identity_verified is True
 
 
 def test_unknown_account_resolves_its_name_once(manager):
@@ -81,7 +112,9 @@ def test_unknown_account_resolves_its_name_once(manager):
 
 
 def test_snapshot_carries_the_parsed_buckets(manager):
-    source = StubSource(Account(id="a", label="A", source="app", email="known@example.com"))
+    source = StubSource(
+        Account(id="a", label="A", source="app", email="known@example.com", identity_verified=True)
+    )
     snapshot = manager.poll(source, RecordingClient())
 
     assert snapshot.ok

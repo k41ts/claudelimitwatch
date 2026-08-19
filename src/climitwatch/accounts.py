@@ -65,6 +65,7 @@ class AccountSource:
             self.account.plan = profile.plan
         if profile.label:
             self.account.label = profile.label
+        self.account.identity_verified = True
 
 
 class ClaudeCodeSource(AccountSource):
@@ -106,6 +107,7 @@ class StoredAccountSource(AccountSource):
                 email=stored.email,
                 plan=stored.plan,
                 enabled=stored.enabled,
+                identity_verified=bool(stored.email),
             )
         )
         self.store = store
@@ -215,10 +217,11 @@ class AccountManager:
                 retry_after=exc.retry_after,
             )
 
-        # The profile call only resolves the account's name. Once that is known
-        # (cached from an earlier run), repeating it every launch is pure spend
-        # against a rate limit we cannot see the budget of.
-        if source.account.id not in self._profile_fetched and not source.account.email:
+        # The profile call resolves who the token really belongs to. Skip it
+        # only once that answer is verified (this run, or cached from an earlier
+        # one) -- an email guessed from ~/.claude.json does not count, or a
+        # mislabelled account would stay mislabelled forever.
+        if source.account.id not in self._profile_fetched and not source.account.identity_verified:
             self._profile_fetched.add(source.account.id)
             try:
                 source.note_profile(parse_profile(client.fetch_profile(tokens.access_token)))

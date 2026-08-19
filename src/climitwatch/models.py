@@ -138,6 +138,10 @@ class Account:
     email: str | None = None
     plan: str | None = None
     enabled: bool = True
+    #: True only when the name came from /api/oauth/profile (or a cached
+    #: result of one). ~/.claude.json is a guess: it can name a different
+    #: account than the token in .credentials.json actually belongs to.
+    identity_verified: bool = False
 
     @property
     def display(self) -> str:

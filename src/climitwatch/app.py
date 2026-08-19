@@ -120,6 +120,8 @@ class WatcherApp(QObject):
                 source.account.email = entry["email"]
             if entry.get("plan"):
                 source.account.plan = entry["plan"]
+            # These came from a profile call, so they settle the question.
+            source.account.identity_verified = True
 
     def _save_identities(self) -> None:
         cache.save_identities(
@@ -367,10 +369,16 @@ class WatcherApp(QObject):
 
     def show_accounts(self) -> None:
         dialog = AccountsDialog(self.manager, self.panel if self.panel.isVisible() else None)
-        dialog.accounts_changed.connect(self.render)
+        dialog.accounts_changed.connect(self._on_accounts_changed)
         dialog.exec()
-        self.render()
+        self._on_accounts_changed()
         self.refresh_now()
+
+    def _on_accounts_changed(self) -> None:
+        # reload() rebuilds sources from scratch, which resets names back to
+        # the ~/.claude.json guess; re-apply what we actually resolved.
+        self._apply_cached_identities()
+        self.render()
 
     def show_settings(self) -> None:
         dialog = SettingsDialog(self.settings, self.panel if self.panel.isVisible() else None)
